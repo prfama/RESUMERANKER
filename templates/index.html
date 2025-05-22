@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResumeRanker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <!-- NAVBAR -->
+   <header class="navbar">
+    <div class="nav-left">
+        <span class="logo">ResumeRanker</span>
+    </div>
+    <button class="menu-toggle" id="menuToggle">&#9776;</button>
+    <div class="nav-right" id="navMenu">
+        <a href="#home">Home</a>
+        <a href="#upload-form">Upload Document</a>
+        <a href="#about">About Us</a>
+        <a href="#contact">Contact Us</a>
+    </div>
+</header>
+
+
+    <!-- HERO SECTION -->
+    <section id="home" class="hero-bg">
+        <div class="hero-overlay">
+            <div class="hero-right">
+                <span class="logo-large">ResumeRanker</span>
+                <p>A smart resume analysis tool</p>
+                <p>Get the best match for your job description in seconds</p>
+                <div class="image-align-row">
+                    <img src="{{ url_for('static', filename='things/left.png') }}" alt="Left" class="aligned-image">
+                    <img src="{{ url_for('static', filename='things/center.png') }}" alt="Center" class="aligned-image">
+                    <img src="{{ url_for('static', filename='things/right.png') }}" alt="Right" class="aligned-image">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- STEP-BY-STEP SECTION -->
+    <section class="step-section" id="upload-form">
+        <!-- Step 1 -->
+        <div class="step" id="step1">
+            <h2>Step 1: Upload Your Resume(s)</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="step-input-container" id="dropArea">
+                    <img src="{{ url_for('static', filename='things/upload-icon.png') }}" alt="Upload Icon">
+                    <label for="resumes">Upload Resume PDFs</label>
+                    <span>Max size: 2MB per file</span>
+                    <input type="file" name="resumes" id="resumes" multiple accept=".pdf">
+                </div>
+                <p id="uploadStatus" style="margin-top: 10px; font-weight: bold;"></p>
+                <button type="button" class="step-button" id="nextToStep2">Next</button>
+            </form>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step" id="step2" style="display: none;">
+            <h2>Step 2: Paste the Job Description</h2>
+            <textarea id="jobDescription" name="job_description" rows="10" placeholder="Enter the job description here..." style="width: 100%; max-width: 700px; padding: 20px; font-size: 16px; border-radius: 12px; border: 1px solid #ccc; margin-bottom: 16px;"></textarea>
+            <br>
+            <button id="calculateScore" class="step-button">Calculate Fit Score</button>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step" id="step3" style="display: none;">
+            <h2>Step 3: View Results</h2>
+            <div class="spinner" id="spinner" style="display: none;"></div>
+            <ul id="resultsList"></ul>
+            <button class="step-button" onclick="exportCSV()">Export to CSV</button>
+            <button class="step-button" id="startOver">Start Over</button>
+        </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="about" class="info-section">
+        <h3>About Us</h3>
+        <p>This project uses AI to evaluate how well resumes match a job description using BERT-based NLP models.</p>
+        <ul>
+            <li>MOHD FARHAN SIDDQUI S</li>
+            <li>PRABHAKARAN S</li>
+            <li>M MANOJ KUMAR</li>
+            <li>MOHAMED SHAHID M J</li>
+        </ul>
+    </section>
+
+    <!-- CONTACT -->
+    <section id="contact" class="info-section">
+        <h3>Contact Us</h3>
+        <p>Email: <a href="mailto:resumeranker1@gmail.com" target="_blank">resumeranker1@gmail.com</a></p>
+    </section>
+
+ <script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const step1 = document.getElementById("step1");
+        const step2 = document.getElementById("step2");
+        const step3 = document.getElementById("step3");
+        const resultsList = document.getElementById("resultsList");
+        const spinner = document.getElementById("spinner");
+        const jobDescInput = document.getElementById("jobDescription");
+        const fileInput = document.getElementById("resumes");
+        const uploadStatus = document.getElementById("uploadStatus");
+
+        // === Mobile menu toggle ===
+        const toggleButton = document.getElementById("menuToggle");
+        const navMenu = document.getElementById("navMenu");
+
+        toggleButton.addEventListener("click", () => {
+            navMenu.classList.toggle("active");
+        });
+
+        // === Step logic ===
+        window.goToStep = function(step) {
+            [step1, step2, step3].forEach((el, i) => el.style.display = (i === step - 1 ? "block" : "none"));
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+
+        document.getElementById("nextToStep2").addEventListener("click", () => {
+            if (fileInput.files.length > 0) {
+                uploadStatus.innerText = `${fileInput.files.length} file(s) selected.`;
+                goToStep(2);
+            } else {
+                alert("Please upload at least one resume.");
+            }
+        });
+
+        document.getElementById("startOver").addEventListener("click", () => goToStep(1));
+
+        document.getElementById("calculateScore").addEventListener("click", async () => {
+            const jobDesc = jobDescInput.value.trim();
+            if (!jobDesc) {
+                alert("Please paste the job description.");
+                return;
+            }
+
+            const formData = new FormData();
+            for (const file of fileInput.files) {
+                formData.append("resumes", file);
+            }
+            formData.append("job_description", jobDesc);
+
+            spinner.style.display = "block";
+            resultsList.innerHTML = "";
+            goToStep(3);
+
+            const response = await fetch("/", {
+                method: "POST",
+                body: formData,
+            });
+
+            spinner.style.display = "none";
+
+            if (!response.ok) {
+                resultsList.innerHTML = "<li class='error'>Error loading results. Please check your input and try again.</li>";
+                return;
+            }
+
+            const data = await response.json();
+            const scores = data.scores || [];
+
+            if (scores.length === 0) {
+                resultsList.innerHTML = "<li>No results found.</li>";
+                return;
+            }
+
+            scores.sort((a, b) => b.score - a.score);
+            scores.forEach((entry, i) => {
+                const score = entry.score.toFixed(2);
+                const statusClass = entry.ai_status === "Real" ? "real" : "fake";
+                const li = document.createElement("li");
+                li.className = i === 0 ? "top-candidate" : "";
+                li.innerHTML = `
+                    <strong><a href="${entry.file_url}" target="_blank">${entry.name}</a></strong>: 
+                    ${score}/100 - <span class="${statusClass}">${entry.ai_status}</span>
+                    <p class="ai-insight">${score >= 70 ? "Great match!" : score >= 50 ? "Consider improving keywords." : "Resume may not be relevant."}</p>
+                    <a href="${entry.file_url}" target="_blank"><button>View PDF</button></a>
+                `;
+                resultsList.appendChild(li);
+            });
+
+            window.exportCSV = () => {
+                let csv = "Name,Score,Status\n";
+                scores.forEach(s => {
+                    csv += `${s.name},${s.score.toFixed(2)},${s.ai_status}\n`;
+                });
+                const blob = new Blob([csv], { type: "text/csv" });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "results.csv";
+                link.click();
+            };
+        });
+    });
+</script>
+
+</body>
+</html>
